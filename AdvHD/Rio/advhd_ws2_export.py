@@ -78,8 +78,8 @@ def main():
         print(f' python {sys.argv[0]} <ws2_file> <output_dir> <encoding>')
         print(f' python {sys.argv[0]} <ws2_folder> <output_dir> <encoding>')
         print('Example:')
-        print(' python advhd_ws2_export.py 0000.wsc out gbk')
-        print(' python advhd_ws2_export.py wsc out gbk')
+        print(' python advhd_ws2_export.py 0000.ws2 out sjis')
+        print(' python advhd_ws2_export.py ws2 out sjis')
         sys.exit(1)
 
     inpath = sys.argv[1]
