@@ -1,0 +1,5 @@
+fonttools
+OpenCC
+orjson
+pillow
+tqdm
