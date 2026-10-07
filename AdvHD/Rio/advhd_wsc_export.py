@@ -26,6 +26,10 @@ def export_wsc(inpath: str, outpath: str, encoding: str):
     total = len(buf)
     text_data = []
 
+    count1 = 0
+    count2 = 0
+    count3 = 0
+
     # 00 42 [id 4] [name n] 00 [text n] 00
     while pos < total - 2:
         # 匹配块头 00 41 / 00 42
@@ -62,6 +66,8 @@ def export_wsc(inpath: str, outpath: str, encoding: str):
                         message = raw_msg.decode(encoding, errors='replace').replace('\ufffd', '')
                         text_data.append({'addr': start + 6 + len(raw_name) + 1, 'text': f'{message}%K%P'})
 
+                        count1 += 1
+
             # 00 41 [id 3] [text n] 00
             elif start_mark == 0x41:
                 # 去除头 3 字节
@@ -72,6 +78,8 @@ def export_wsc(inpath: str, outpath: str, encoding: str):
 
                 if is_valid_text(message):
                     text_data.append({'addr': start + 5, 'text': f'{message}%K%P'})
+
+                    count2 += 1
 
             pos = end_pos
         else:
@@ -93,13 +101,19 @@ def export_wsc(inpath: str, outpath: str, encoding: str):
             for _ in range(noption):
                 text_b = sub_buf.split(b'\x00')[_ * 2][2:]
                 text = text_b.decode(encoding, errors='replace')
-                text_data.append({'addr': start + 2, 'text': f'{text}%K'})
+                text_data.append({'addr': start + 2, 'text': f'{text}'})
                 start += len(text_b) + 1
+                count3 += 1
             pos = start
         else:
             pos += 1
 
+    print(f'42: {count1}, 41: {count2}, option: {count3}')
+
     text_data.sort(key=lambda x: x['addr'])
+
+    if count3 > 0:
+        text_data[-count3 - 1]['text'] = text_data[-count3 - 1]['text'].replace('%K%P', '%K')
 
     # write to lst file
     with open(os.path.join(outpath, os.path.basename(inpath) + '.lst'), 'w', encoding='utf-8') as f:
