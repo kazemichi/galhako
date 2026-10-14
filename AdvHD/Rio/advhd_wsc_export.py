@@ -22,104 +22,95 @@ def export_wsc(inpath: str, outpath: str, encoding: str):
     with open(inpath, 'rb') as f:
         buf = f.read()
 
-    pos = 0
-    total = len(buf)
     text_data = []
 
-    count1 = 0
-    count2 = 0
-    count3 = 0
-
-    # 00 42 [id 4] [name n] 00 [text n] 00
-    while pos < total - 2:
-        # 匹配块头 00 41 / 00 42
-        if buf[pos] == 0x00 and buf[pos+1] in (0x41, 0x42):
-            start = pos
-            start_mark = buf[pos + 1]
-
-            # 从 start+2 开始找下一个块标记 00 41 / 00 42
-            end_pos = None
-            scan = start + 2
-            while scan < total - 2:
-                if buf[scan] == 0x00 and buf[scan + 1] in (0x41, 0x42):
-                    end_pos = scan
-                    break
-                scan += 1
-            if end_pos is None:
-                end_pos = total
-
-            block_data = buf[start + 2: end_pos]
-
-            # 00 42 [id 4] [name n] 00 [text n] 00
-            if start_mark == 0x42:
-                if not block_data.startswith((b'LACK', b'G', b'UN')):
-                # 去除头 4 字节
-                    sub_buf = block_data[4:]
-                    parts = sub_buf.split(b'\x00')
-                    # 防止分割后元素不足，越界崩溃
-                    if len(parts) > 1:
-                        raw_name = parts[0]
-                        raw_msg = parts[1]
-
-                        name = raw_name.decode(encoding, errors='replace').replace('\ufffd', '')
-                        text_data.append({'addr': start + 6, 'text': f'%LC{name}'})
-                        message = raw_msg.decode(encoding, errors='replace').replace('\ufffd', '')
-                        text_data.append({'addr': start + 6 + len(raw_name) + 1, 'text': f'{message}%K%P'})
-
-                        count1 += 1
-
-            # 00 41 [id 3] [text n] 00
-            elif start_mark == 0x41:
-                # 去除头 3 字节
-                sub_buf = block_data[3:]
-                parts = sub_buf.split(b'\x00')
-                raw_msg = parts[0]
-                message = raw_msg.decode(encoding, errors='replace').replace('\ufffd', '')
-
-                if is_valid_text(message):
-                    text_data.append({'addr': start + 5, 'text': f'{message}%K%P'})
-
-                    count2 += 1
-
-            pos = end_pos
-        else:
-            pos += 1
-
+    # 纯文本
+    # 41 [id 3] [text n] 00
     pos = 0
-    option_magic = b'\x03\x00\x01\x00\x00\x02'
-    option_magic_len = len(option_magic)
+    text_magic = b'\x00\x41'
+    while True:
+        pos = buf.find(text_magic, pos)
+        #  未找到则退出循环
+        if pos == -1:
+            break
+        pos += len(text_magic)
+        # entry_id = int.from_bytes(buf[pos:pos+3], 'little', signed=False)
+        addr = pos + 3
+        size = buf.find(b'\x00', addr) - addr
+        try:
+            text = buf[addr: addr+size].decode(encoding)
+            if size > 0 and is_valid_text(text):
+                text_data.append({'addr': addr, 'text': f'{text}%K%P'})
+            cur = addr + size + 1
+        except UnicodeDecodeError:
+            cur += 1
+            continue
+
+    # 带人名对话
+    # 00 42 [id 4] [name n] 00 [text n] 00
+    pos = 0
+    dialog_magic = b'\x00\x42'
+    while True:
+        pos = buf.find(dialog_magic, pos)
+        #  未找到则退出循环
+        if pos == -1:
+            break
+        pos += len(dialog_magic)
+        # entry_id = int.from_bytes(buf[pos:pos+3], 'little', signed=False)
+        addr = pos + 4
+        size = buf.find(b'\x00', addr) - addr
+        try:
+            text = buf[addr:addr+size].decode(encoding)
+            if size > 0 and is_valid_text(text):
+                text_data.append({'addr': addr, 'text': f'%LC{text}'})
+            cur = addr + size + 1
+        except UnicodeDecodeError:
+            cur += 1
+            continue
+        addr = cur
+        size = buf.find(b'\x00', addr) - addr
+        try: 
+            text = buf[addr:addr+size].decode(encoding)
+            if size > 0 and is_valid_text(text):
+                text_data.append({'addr': addr, 'text': f'{text}%K%P'})
+            cur = addr + size + 1
+        except UnicodeDecodeError:
+            cur += 1
+            continue
 
     # 03 00 01 00 00 02 [noption 2] 
-    #   [id 2] [text n] 00 [hash 4] [file n] 00
-    while pos+option_magic_len <= total:
-        if buf[pos:pos+option_magic_len] == option_magic:
-            start = pos + option_magic_len
-            noption = int.from_bytes(buf[start:start+2], 'little', signed=False)
-            start += 2
+        #   [id 2] [text n] 00 [hash 4] [file n] 00
+    pos = 0
+    option_magic = b'\x03\x00\x01\x00\x00\x02'
+    noption = 0
+    while True:
+        pos = buf.find(option_magic, pos)
+        # 未找到则退出循环
+        if pos == -1:
+            break
+        pos += len(option_magic)
+        noption = int.from_bytes(buf[pos:pos+2], 'little', signed=False)
+        pos += 2
 
-            sub_buf = buf[start:]
-            for _ in range(noption):
-                text_b = sub_buf.split(b'\x00')[_ * 2][2:]
-                text = text_b.decode(encoding, errors='replace')
-                text_data.append({'addr': start + 2, 'text': f'{text}'})
-                start += len(text_b) + 1
-                count3 += 1
-            pos = start
-        else:
-            pos += 1
-
-    print(f'42: {count1}, 41: {count2}, option: {count3}')
+        for _ in range(noption):
+            raw_addr = pos
+            addr = raw_addr + 2
+            size = buf.find(b'\x00', addr) - addr
+            text = buf[addr:addr+size].decode(encoding)
+            text_data.append({'addr': raw_addr, 'text': text})
+            raw_size = buf.find(b'\x00', addr+size+5) - raw_addr + 1
+            pos += raw_size
 
     text_data.sort(key=lambda x: x['addr'])
 
-    if count3 > 0:
-        text_data[-count3 - 1]['text'] = text_data[-count3 - 1]['text'].replace('%K%P', '%K')
+    if noption > 0:
+        text_data[-noption - 1]['text'] = text_data[-noption - 1]['text'].replace('%K%P', '%K')
 
     # write to lst file
     with open(os.path.join(outpath, os.path.basename(inpath) + '.lst'), 'w', encoding='utf-8') as f:
         f.writelines(f'{text['text']}\n' for text in text_data)
 
-    print(f'完成，共提取 {len(text_data)} 条文本，输出到 {outpath}')
+    print(f'{os.path.basename(inpath)} 完成，共提取 {len(text_data)} 条文本，输出到 {outpath}')
 
 def main():
     if len(sys.argv) < 4:

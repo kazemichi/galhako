@@ -29,7 +29,7 @@ def export_ws2(inpath: str, outpath: str, encoding: str):
 
     options: list[ws2option_t] = []
     cur = 0 # hard code fix for option 2, 3, 4
-    for pattern in [b'\x00\x00\x0f\x02', b'\x00\x00\x0f\x03', b'\x00\x00\x0f\x04', b'\x00\x01\x0f\x02']:
+    for pattern in [b'\x00\x00\x0f\x02', b'\x00\x00\x0f\x03', b'\x00\x00\x0f\x04', b'\x00\x01\x0f\x02', b'\x00\x01\x0f\x03', b'\x00\x01\x0f\x04']:
         cur = 0
         while cur < len(data) :
             cur = data.find(pattern, cur)
