@@ -114,10 +114,20 @@ func cleanTextBlock(langItem interface{}) string {
 	var buf []string
 	switch item := langItem.(type) {
 	case map[string]interface{}:
-		for k, v := range item {
+		// 先收集 key 并按自然顺序排序，保证 "1","2",...,"10" 顺序正确
+		keys := make([]string, 0, len(item))
+		for k := range item {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return naturalLess(keys[i], keys[j])
+		})
+
+		for _, k := range keys {
 			if k == "name" {
 				continue
 			}
+			v := item[k]
 			if _, isList := v.([]interface{}); isList {
 				continue
 			}
@@ -126,6 +136,7 @@ func cleanTextBlock(langItem interface{}) string {
 			}
 		}
 	case []interface{}:
+		// 纯数组，天然有序
 		for _, v := range item {
 			if s, ok := v.(string); ok {
 				buf = append(buf, s)
